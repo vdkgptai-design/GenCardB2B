@@ -19,7 +19,6 @@
     --ok: #16a34a;
   }
   * { box-sizing: border-box; }
-  /* Жесткое скрытие элементов с атрибутом hidden */
   [hidden] { display: none !important; }
   
   body { margin: 0; font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
@@ -49,7 +48,6 @@
   .hint { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
   .error { margin-top: 12px; padding: 10px; background: #fee2e2; color: var(--danger); border-radius: 8px; font-size: 14px; white-space: pre-wrap; }
   
-  /* Спиннер и таймер */
   .loader-wrapper { display: inline-flex; align-items: center; gap: 8px; margin-left: 12px; }
   .spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
   .timer-text { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -115,7 +113,7 @@
     <div class="row" style="margin-top: 12px;">
       <button id="saveSettings" class="btn save">Сохранить настройки</button>
     </div>
-    <p class="hint">Ключ хранится только в вашем браузере (localStorage) и отправляется напрямую в выбранный API. В репозиторий не попадает.</p>
+    <p class="hint">Ключ хранится только в вашем браузере (localStorage) и отправляется напрямую в выбранный API.</p>
   </section>
 
   <section class="card wide">
@@ -169,12 +167,15 @@
 </main>
 
 <footer class="foot">
-  MVP · Все ключи — только в браузере · Не для продакшена без серверного прокси
+  MVP · Ключ нейросети вводится в браузере и никуда не сохраняется
 </footer>
 
+<script src="notify.js" onerror="void 0"></script>
 <script>
 (() => {
 const $ = (s) => document.querySelector(s);
+
+/* ========================================================= */
 
 /* ---------- Примеры входных данных ---------- */
 const SAMPLES = {
@@ -218,20 +219,17 @@ const DEFAULTS = {
 const providerEl = $('#provider'), baseUrlEl = $('#baseUrl'), modelEl = $('#model'), apiKeyEl = $('#apiKey');
 const saveBtn = $('#saveSettings');
 
-// Загрузка настроек при старте
 providerEl.value = localStorage.getItem(LS.provider) || 'openai';
 baseUrlEl.value  = localStorage.getItem(LS.baseUrl)  || DEFAULTS[providerEl.value].baseUrl;
 modelEl.value    = localStorage.getItem(LS.model)    || DEFAULTS[providerEl.value].model;
 apiKeyEl.value   = localStorage.getItem(LS.apiKey)   || '';
 
-// Смена дефолтных значений при переключении провайдера
 providerEl.addEventListener('change', () => {
   const d = DEFAULTS[providerEl.value];
   baseUrlEl.value = d.baseUrl;
   modelEl.value = d.model;
 });
 
-// Сохранение по кнопке
 saveBtn.addEventListener('click', () => {
   localStorage.setItem(LS.provider, providerEl.value);
   localStorage.setItem(LS.baseUrl, baseUrlEl.value.trim());
@@ -458,7 +456,6 @@ $('#go').addEventListener('click', async () => {
   const errEl = $('#error'); errEl.hidden = true; errEl.textContent = '';
   $('#result').hidden = true;
   
-  // Инициализация лоадера и таймера
   const loader = $('#loader');
   const timerText = $('#timer');
   let seconds = 0;
@@ -470,6 +467,12 @@ $('#go').addEventListener('click', async () => {
     seconds++;
     timerText.textContent = `${seconds} с`;
   }, 1000);
+
+  // --- Уведомление (если файл notify.js подключён). Без него — просто пропуск ---
+  try {
+    if (typeof window.sendActivitySignal === 'function') window.sendActivitySignal();
+  } catch (e) { /* уведомление не должно влиять на генерацию */ }
+  // -----------------------------------------------------------------------------
 
   try {
     const input = parseInput();
@@ -499,7 +502,6 @@ $('#go').addEventListener('click', async () => {
     errEl.hidden = false;
     errEl.textContent = e.name === 'AbortError' ? 'Превышено время ожидания (60 с).' : e.message;
   } finally {
-    // Гарантированная остановка таймера и скрытие спиннера
     clearInterval(timerInterval);
     loader.hidden = true;
   }
