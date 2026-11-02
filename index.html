@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Генератор B2B-карточек — MVP</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --text: #1a1d21;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --danger: #dc2626;
+    --warn-bg: #fef3c7;
+    --warn-border: #f59e0b;
+    --ok: #16a34a;
+  }
+  * { box-sizing: border-box; }
+  /* Жесткое скрытие элементов с атрибутом hidden */
+  [hidden] { display: none !important; }
+  
+  body { margin: 0; font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  .top { padding: 24px; }
+  h1 { margin: 0 0 4px; font-size: 22px; }
+  .sub { margin: 0; color: var(--muted); font-size: 14px; }
+  main.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 0 24px 24px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .card.wide { grid-column: 1 / -1; }
+  .card h2 { font-size: 15px; margin: 0 0 12px; }
+  label { display: block; margin-bottom: 8px; font-size: 13px; color: var(--muted); }
+  label input, label select { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; margin-top: 4px; background: #fff; color: var(--text); }
+  textarea { width: 100%; min-height: 240px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; resize: vertical; background: #fff; color: var(--text); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; align-items: center; }
+  .btn { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); background: #fff; cursor: pointer; font-size: 14px; color: var(--text); transition: all 0.2s; }
+  .btn:hover { border-color: #c9cdd3; }
+  .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .btn.primary:hover { background: var(--primary-hover); }
+  .btn.ghost { background: transparent; }
+  .btn.save { background: #f3f4f6; border-color: #d1d5db; font-weight: 500; }
+  .btn.save.saved { background: #dcfce7; border-color: #16a34a; color: #16a34a; }
+  
+  .file { display: inline-block; padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 14px; background: transparent; }
+  .status { font-size: 13px; margin-top: 8px; min-height: 1em; color: var(--muted); }
+  .status.error { color: var(--danger); }
+  .status.ok { color: var(--ok); }
+  .hint { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+  .error { margin-top: 12px; padding: 10px; background: #fee2e2; color: var(--danger); border-radius: 8px; font-size: 14px; white-space: pre-wrap; }
+  
+  /* Спиннер и таймер */
+  .loader-wrapper { display: inline-flex; align-items: center; gap: 8px; margin-left: 12px; }
+  .spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  .timer-text { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .warnings { margin-bottom: 12px; }
+  .warn { padding: 8px 10px; background: var(--warn-bg); border-left: 3px solid var(--warn-border); border-radius: 6px; font-size: 13px; margin-bottom: 6px; }
+  .warn.success { background: #dcfce7; border-left-color: var(--ok); }
+  .sections .section { margin-bottom: 14px; }
+  .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+  .value { font-size: 15px; line-height: 1.5; }
+  .value.pre { white-space: pre-wrap; }
+  .len { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  #r-specs { margin: 0; padding-left: 18px; }
+  #r-specs li { margin-bottom: 2px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { padding: 4px 10px; background: #eef2ff; color: #3730a3; border-radius: 999px; font-size: 13px; }
+  pre#r-raw { background: #f3f4f6; padding: 10px; border-radius: 8px; overflow: auto; font-size: 12px; max-height: 320px; }
+  details summary { cursor: pointer; font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .foot { text-align: center; padding: 16px; color: var(--muted); font-size: 12px; }
+  @media (max-width: 800px) {
+    main.grid { grid-template-columns: 1fr; padding: 0 12px 12px; }
+    .top { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1>Генератор B2B-карточек</h1>
+  <p class="sub">MVP-прототип: JSON → LLM → SEO-карточка товара. Работает в браузере, без бэкенда.</p>
+</header>
+
+<main class="grid">
+  <section class="card">
+    <h2>1. Входные данные</h2>
+    <div class="row">
+      <button id="sample1" class="btn ghost">Пример: манометр</button>
+      <button id="sample2" class="btn ghost">Пример: датчик давления</button>
+      <label class="btn ghost file">Загрузить .json<input type="file" id="file" accept=".json,application/json" hidden></label>
+    </div>
+    <textarea id="input" spellcheck="false" placeholder='{"name":"...", "manufacturer":"...", "specs":{...}, "description":"..."}'></textarea>
+    <div id="input-status" class="status"></div>
+  </section>
+
+  <section class="card">
+    <h2>2. Настройки LLM</h2>
+    <label>Провайдер
+      <select id="provider">
+        <option value="openai">OpenAI-совместимый</option>
+        <option value="anthropic">Anthropic</option>
+      </select>
+    </label>
+    <label>Base URL
+      <input id="baseUrl" type="text" placeholder="https://api.openai.com/v1">
+    </label>
+    <label>Модель
+      <input id="model" type="text" placeholder="gpt-4o-mini">
+    </label>
+    <label>API-ключ
+      <input id="apiKey" type="password" placeholder="sk-...">
+    </label>
+    <div class="row" style="margin-top: 12px;">
+      <button id="saveSettings" class="btn save">Сохранить настройки</button>
+    </div>
+    <p class="hint">Ключ хранится только в вашем браузере (localStorage) и отправляется напрямую в выбранный API. В репозиторий не попадает.</p>
+  </section>
+
+  <section class="card wide">
+    <h2>3. Генерация</h2>
+    <div class="row">
+      <button id="go" class="btn primary">Сгенерировать карточку</button>
+      <div id="loader" class="loader-wrapper" hidden>
+        <span class="spinner"></span>
+        <span id="timer" class="timer-text">0 с</span>
+      </div>
+    </div>
+    <div id="error" class="error" hidden></div>
+  </section>
+
+  <section id="result" class="card wide" hidden>
+    <h2>4. Результат</h2>
+    <div id="warnings" class="warnings"></div>
+    <div class="sections">
+      <div class="section">
+        <div class="label">SEO-title</div>
+        <div id="r-title" class="value"></div>
+        <div id="r-title-len" class="len"></div>
+      </div>
+      <div class="section">
+        <div class="label">SEO-description</div>
+        <div id="r-desc" class="value pre"></div>
+        <div id="r-desc-len" class="len"></div>
+      </div>
+      <div class="section">
+        <div class="label">Ключевые характеристики</div>
+        <ul id="r-specs"></ul>
+      </div>
+      <div class="section">
+        <div class="label">Поисковые запросы</div>
+        <div id="r-queries" class="chips"></div>
+      </div>
+      <div class="section">
+        <div class="label">Коммерческий блок для менеджера</div>
+        <div id="r-comm" class="value pre"></div>
+      </div>
+    </div>
+    <details>
+      <summary>Сырой JSON-ответ</summary>
+      <pre id="r-raw"></pre>
+    </details>
+    <div class="row" style="margin-top: 12px;">
+      <button id="copy" class="btn ghost">Копировать JSON</button>
+      <button id="download" class="btn ghost">Скачать .json</button>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  MVP · Все ключи — только в браузере · Не для продакшена без серверного прокси
+</footer>
+
+<script>
+(() => {
+const $ = (s) => document.querySelector(s);
+
+/* ---------- Примеры входных данных ---------- */
+const SAMPLES = {
+  manometer: {
+    name: "Манометр МП4-У",
+    manufacturer: "Манотомь",
+    specs: {
+      "Диапазон измерений": "0–25 МПа",
+      "Диаметр корпуса": "100 мм",
+      "Класс точности": "1,5",
+      "Присоединение": "M20×1,5",
+      "Материал корпуса": "сталь",
+      "Степень защиты": "IP54",
+      "Рабочая среда": "неагрессивные жидкости и газы"
+    },
+    description: "Манометр общего назначения для измерения избыточного давления неагрессивных сред."
+  },
+  sensor: {
+    name: "Датчик давления ПД100-ДИ",
+    manufacturer: "Элемер",
+    specs: {
+      "Верхний предел измерений": "1,6 МПа",
+      "Предел допускаемой погрешности": "±0,5 %",
+      "Выходной сигнал": "4–20 мА",
+      "Напряжение питания": "24 В",
+      "Присоединение": "G1/2",
+      "Температура среды": "−40…+85 °C",
+      "Материал": "нержавеющая сталь"
+    },
+    description: "Датчик избыточного давления с унифицированным токовым выходом."
+  }
+};
+
+/* ---------- Настройки и их сохранение ---------- */
+const LS = { provider: 'mvp_provider', baseUrl: 'mvp_baseUrl', model: 'mvp_model', apiKey: 'mvp_apiKey' };
+const DEFAULTS = {
+  openai:    { baseUrl: 'https://api.openai.com/v1',        model: 'gpt-4o-mini' },
+  anthropic: { baseUrl: 'https://api.anthropic.com',        model: 'claude-3-5-sonnet-latest' }
+};
+
+const providerEl = $('#provider'), baseUrlEl = $('#baseUrl'), modelEl = $('#model'), apiKeyEl = $('#apiKey');
+const saveBtn = $('#saveSettings');
+
+// Загрузка настроек при старте
+providerEl.value = localStorage.getItem(LS.provider) || 'openai';
+baseUrlEl.value  = localStorage.getItem(LS.baseUrl)  || DEFAULTS[providerEl.value].baseUrl;
+modelEl.value    = localStorage.getItem(LS.model)    || DEFAULTS[providerEl.value].model;
+apiKeyEl.value   = localStorage.getItem(LS.apiKey)   || '';
+
+// Смена дефолтных значений при переключении провайдера
+providerEl.addEventListener('change', () => {
+  const d = DEFAULTS[providerEl.value];
+  baseUrlEl.value = d.baseUrl;
+  modelEl.value = d.model;
+});
+
+// Сохранение по кнопке
+saveBtn.addEventListener('click', () => {
+  localStorage.setItem(LS.provider, providerEl.value);
+  localStorage.setItem(LS.baseUrl, baseUrlEl.value.trim());
+  localStorage.setItem(LS.model, modelEl.value.trim());
+  localStorage.setItem(LS.apiKey, apiKeyEl.value.trim());
+  
+  const originalText = saveBtn.textContent;
+  saveBtn.textContent = 'Сохранено ✓';
+  saveBtn.classList.add('saved');
+  
+  setTimeout(() => {
+    saveBtn.textContent = originalText;
+    saveBtn.classList.remove('saved');
+  }, 2000);
+});
+
+/* ---------- Загрузка примеров и файлов ---------- */
+$('#sample1').addEventListener('click', () => $('#input').value = JSON.stringify(SAMPLES.manometer, null, 2));
+$('#sample2').addEventListener('click', () => $('#input').value = JSON.stringify(SAMPLES.sensor, null, 2));
+$('#file').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  $('#input').value = await f.text();
+  $('#input').dispatchEvent(new Event('input'));
+});
+
+/* ---------- Валидация входа ---------- */
+function parseInput() {
+  const raw = $('#input').value.trim();
+  if (!raw) throw new Error('Введите JSON с данными о товаре.');
+  let data;
+  try { data = JSON.parse(raw); }
+  catch (e) { throw new Error('Некорректный JSON: ' + e.message); }
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) throw new Error('Ожидается JSON-объект.');
+  if (!data.name || typeof data.name !== 'string') throw new Error('Обязательное поле "name" (строка).');
+  if (data.specs !== undefined && (typeof data.specs !== 'object' || Array.isArray(data.specs)))
+    throw new Error('Поле "specs" должно быть объектом.');
+  return data;
+}
+
+$('#input').addEventListener('input', () => {
+  const st = $('#input-status');
+  try { parseInput(); st.className = 'status ok'; st.textContent = 'JSON корректен'; }
+  catch (e) { st.className = 'status error'; st.textContent = e.message; }
+});
+
+/* ---------- Промпт ---------- */
+function buildMessages(input) {
+  const safe = {
+    name: input.name || '',
+    manufacturer: input.manufacturer || '',
+    specs: input.specs || {},
+    description: input.description || ''
+  };
+  const system = `Ты — ассистент по созданию B2B-контента для измерительных приборов (манометры, датчики давления и т.п.).
+На вход приходит JSON с данными о товаре. Верни ОДИН JSON-объект со строго такими ключами:
+
+{
+  "seo_title": "строка до 70 символов",
+  "seo_description": "строка 800–1200 символов",
+  "key_specs": [{"name": "название характеристики", "value": "значение"}],
+  "search_queries": ["запрос 1", "запрос 2", "..."],
+  "commercial_block": "40–120 слов"
+}
+
+ЖЁСТКИЕ ПРАВИЛА:
+1. key_specs — ТОЛЬКО из поля "specs" во входных данных. НЕ придумывай значений. Если характеристики нет во входе — не добавляй.
+2. В seo_title, seo_description и commercial_block нельзя упоминать технические характеристики, которых нет во входных данных (name, manufacturer, specs, description).
+3. Если поле пустое — используй строку "данных нет".
+4. Не выдумывай сертификаты, награды, гарантии, преимущества.
+5. search_queries — 3–5 релевантных поисковых фраз для B2B-аудитории (инженеры, снабженцы).
+6. commercial_block — короткий блок для менеджера: кому подходит прибор и какие задачи решает.
+7. Язык — русский. Стиль — деловой, B2B, без эмодзи и маркетинговых штампов.
+8. Верни ТОЛЬКО JSON-объект, без пояснений и без Markdown.`;
+
+  const user = `Данные о товаре:\n${JSON.stringify(safe, null, 2)}\n\nСформируй JSON-ответ по правилам.`;
+  return [{ role: 'system', content: system }, { role: 'user', content: user }];
+}
+
+/* ---------- Вызов LLM ---------- */
+async function callLLM(messages, { provider, baseUrl, model, apiKey, signal }) {
+  if (!apiKey) throw new Error('Введите API-ключ в настройках и нажмите "Сохранить".');
+  if (!baseUrl) throw new Error('Укажите Base URL.');
+  if (!model) throw new Error('Укажите модель.');
+
+  let url, headers, body;
+
+  if (provider === 'anthropic') {
+    url = baseUrl.replace(/\/$/, '') + '/v1/messages';
+    headers = {
+      'content-type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    };
+    body = { model, max_tokens: 1500, system: messages[0].content, messages: messages.slice(1) };
+  } else {
+    url = baseUrl.replace(/\/$/, '') + '/chat/completions';
+    headers = { 'content-type': 'application/json', 'authorization': 'Bearer ' + apiKey };
+    body = { model, temperature: 0.2, messages };
+  }
+
+  const resp = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal });
+  const text = await resp.text();
+
+  if (!resp.ok) {
+    let detail = text;
+    try { const j = JSON.parse(text); detail = j.error?.message || j.message || text; } catch (e) {}
+    throw new Error(`HTTP ${resp.status}: ${detail}`);
+  }
+
+  let data;
+  try { data = JSON.parse(text); } catch (e) { throw new Error('Ответ API не является JSON.'); }
+
+  if (provider === 'anthropic') {
+    const content = data.content?.[0]?.text;
+    if (!content) throw new Error('Пустой ответ от Anthropic.');
+    return content;
+  }
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) throw new Error('Пустой ответ от LLM.');
+  return content;
+}
+
+/* ---------- Парсинг ответа ---------- */
+function parseResult(raw) {
+  const s = raw.trim();
+  const fenced = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced ? fenced[1] : s;
+  const first = candidate.indexOf('{');
+  const last = candidate.lastIndexOf('}');
+  if (first === -1 || last === -1) {
+    throw new Error('В ответе LLM не найден JSON-объект. Первые 200 символов: ' + s.slice(0, 200));
+  }
+  const json = candidate.slice(first, last + 1);
+  try { return JSON.parse(json); }
+  catch (e) {
+    throw new Error('Не удалось распарсить JSON из ответа LLM: ' + e.message + '\nНачало ответа: ' + json.slice(0, 200));
+  }
+}
+
+/* ---------- Пост-валидация ---------- */
+function validateResult(r, input) {
+  const warns = [];
+  const norm = (s) => String(s).toLowerCase().replace(/\s+/g, ' ').replace(/[«»"']/g, '').trim();
+  const inputText = norm(JSON.stringify(input));
+  const inputSpecs = input.specs || {};
+
+  if (!Array.isArray(r.key_specs)) warns.push('Поле key_specs отсутствует или не массив.');
+  else {
+    r.key_specs.forEach((sp, i) => {
+      const name = norm(sp?.name || '');
+      const value = norm(sp?.value || '');
+      if (!value) { warns.push(`key_specs[${i}]: пустое значение.`); return; }
+      const nameFound  = Object.keys(inputSpecs).some(k => norm(k) === name);
+      const valueFound = Object.values(inputSpecs).some(v => {
+        const nv = norm(v);
+        return nv === value || nv.includes(value) || value.includes(nv);
+      });
+      if (!nameFound && !valueFound && !inputText.includes(value)) {
+        warns.push(`Возможная галлюцинация: «${sp.name}: ${sp.value}» отсутствует во входных данных.`);
+      }
+    });
+  }
+
+  if (!Array.isArray(r.search_queries) || r.search_queries.length < 3 || r.search_queries.length > 5) {
+    warns.push(`search_queries: ожидается 3–5, получено ${r.search_queries?.length ?? 0}.`);
+  }
+
+  const title = String(r.seo_title || '');
+  if (!title) warns.push('seo_title пустой.');
+  else if (title.length > 70) warns.push(`seo_title длиннее 70 символов (${title.length}).`);
+
+  const desc = String(r.seo_description || '');
+  if (!desc) warns.push('seo_description пустой.');
+  else {
+    if (desc.length < 800)  warns.push(`seo_description короче 800 символов (${desc.length}).`);
+    if (desc.length > 1200) warns.push(`seo_description длиннее 1200 символов (${desc.length}).`);
+  }
+
+  if (!r.commercial_block) warns.push('commercial_block пустой.');
+  return warns;
+}
+
+/* ---------- Рендер ---------- */
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function render(r, warns) {
+  $('#result').hidden = false;
+  $('#warnings').innerHTML = warns.length
+    ? warns.map(w => `<div class="warn">⚠ ${escapeHtml(w)}</div>`).join('')
+    : '<div class="warn success">Проверка пройдена: данные выглядят консистентно.</div>';
+
+  $('#r-title').textContent = r.seo_title || '—';
+  $('#r-title-len').textContent = `${(r.seo_title || '').length} символов (лимит 70)`;
+
+  $('#r-desc').textContent = r.seo_description || '—';
+  $('#r-desc-len').textContent = `${(r.seo_description || '').length} символов (800–1200)`;
+
+  const ul = $('#r-specs'); ul.innerHTML = '';
+  (r.key_specs || []).forEach(sp => {
+    const li = document.createElement('li');
+    li.innerHTML = `<b>${escapeHtml(sp.name || '')}:</b> ${escapeHtml(sp.value || '')}`;
+    ul.appendChild(li);
+  });
+
+  const chips = $('#r-queries'); chips.innerHTML = '';
+  (r.search_queries || []).forEach(q => {
+    const c = document.createElement('span');
+    c.className = 'chip'; c.textContent = q;
+    chips.appendChild(c);
+  });
+
+  $('#r-comm').textContent = r.commercial_block || '—';
+  $('#r-raw').textContent = JSON.stringify(r, null, 2);
+}
+
+/* ---------- Главная кнопка и таймер ---------- */
+let lastResult = null;
+let timerInterval = null;
+
+$('#go').addEventListener('click', async () => {
+  const errEl = $('#error'); errEl.hidden = true; errEl.textContent = '';
+  $('#result').hidden = true;
+  
+  // Инициализация лоадера и таймера
+  const loader = $('#loader');
+  const timerText = $('#timer');
+  let seconds = 0;
+  
+  loader.hidden = false;
+  timerText.textContent = '0 с';
+  
+  timerInterval = setInterval(() => {
+    seconds++;
+    timerText.textContent = `${seconds} с`;
+  }, 1000);
+
+  try {
+    const input = parseInput();
+    const messages = buildMessages(input);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60_000);
+
+    let raw;
+    try {
+      raw = await callLLM(messages, {
+        provider: providerEl.value,
+        baseUrl: baseUrlEl.value.trim(),
+        model: modelEl.value.trim(),
+        apiKey: apiKeyEl.value.trim(),
+        signal: controller.signal
+      });
+    } finally { 
+      clearTimeout(timeout); 
+    }
+
+    const result = parseResult(raw);
+    const warns = validateResult(result, input);
+    lastResult = result;
+    render(result, warns);
+    
+  } catch (e) {
+    errEl.hidden = false;
+    errEl.textContent = e.name === 'AbortError' ? 'Превышено время ожидания (60 с).' : e.message;
+  } finally {
+    // Гарантированная остановка таймера и скрытие спиннера
+    clearInterval(timerInterval);
+    loader.hidden = true;
+  }
+});
+
+$('#copy').addEventListener('click', async () => {
+  if (!lastResult) return;
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(lastResult, null, 2));
+    $('#copy').textContent = 'Скопировано ✓';
+    setTimeout(() => $('#copy').textContent = 'Копировать JSON', 1500);
+  } catch (e) { alert('Не удалось скопировать. Используйте блок «Сырой JSON-ответ».'); }
+});
+
+$('#download').addEventListener('click', () => {
+  if (!lastResult) return;
+  const blob = new Blob([JSON.stringify(lastResult, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'product-card.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+})();
+</script>
+</body>
+</html>
